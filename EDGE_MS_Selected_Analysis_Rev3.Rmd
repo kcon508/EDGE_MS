@@ -709,7 +709,7 @@ str(FULL_anpp) # 1152 observations
 str(ANPP_PPT_reductions) # 395 observations 
 ```
 
-#### Stats *******************************
+#### ANPP Stats *******************************
 ```{r Figure 1 ANPP - MAP, include=TRUE}
 #### OG and R1 equations - **Fig 1 / Table S1**  ####
 anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=ANPP_PPT.avs)
@@ -931,101 +931,4 @@ rec.mod2<-lm(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.18to21)
 Anova(rec.mod2,type=3)
 pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
 
-```
-
-```{r 2012 and 2013 vs. other yrs w/ two sample means, include=TRUE}
-# Want to compare 2012 and 2013 ANPP (most 2012) w/ other 9/10-yrs ANPP data rather than do the one-sample t-test w/ 2012 or 2013 as the known value compared against ANPP control average across all other yrs
-
-str(ANPP_PPT)
-
-#### Reassign data periods ####
-anpp.12.13.sub<-ANPP_PPT%>%
-  filter(comb_TRT_by_period=="con")%>%
-  mutate(period_12=case_when(
-    Year %in% c("2012") ~ "2012",
-    Year %in% c(2013:2021) ~ "comp_yrs"))%>%
-  mutate(period_13=case_when(
-    Year %in% c("2013") ~ "2013",
-    Year %in% c(2012,2014:2021) ~ "comp_yrs"))
-
-# view(anpp.12.13.sub)
-
-# dat.export<-ANPP_PPT%>%
-#   select(Site,Year,Block,comb_TRT_by_period,Plot,ANPP,Block.ID,Plot.ID)%>%
-#   mutate(Site=case_when(
-#     Site == "CHY" ~ "HPG",
-#     Site %in% c("KNZ","HYS","SGS") ~ Site))
-# 
-# write.csv(dat.export,"Oecologia_ANPP_PPT_TableS7.csv")
-
-#### 2012 summary stats ####
-test.12<-anpp.12.13.sub%>%
-  group_by(Site,period_12)%>%
-  dplyr::summarise(
-    n=n(),
-    av=mean(ANPP),
-    sd=sd(ANPP),
-    SE=sd/sqrt(n))
-
-#### 2013 summary stats ####
-test.13<-anpp.12.13.sub%>%
-  group_by(Site,period_13)%>%
-  dplyr::summarise(
-    n=n(),
-    av=mean(ANPP),
-    sd=sd(ANPP),
-    SE=sd/sqrt(n))
-
-
-#### Stats - Testing 2012 and 2013 vs. 9-yrs control plots ANPP ####
-# 2012 #
-mod.12<-lmer(log(ANPP)~Site*period_12+Block.ID+(1|Plot.ID)+(1|Plot.ID:period_12),data=anpp.12.13.sub)
-mod.12<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID),data=anpp.12.13.sub)
-plot(mod.12)
-qqnorm(resid(mod.12));qqline(resid(mod.12))
-
-# mod.12.noKNZ<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID),data=subset(anpp.12.13.sub,Site!="KNZ"))
-# anova(mod.12.noKNZ,ddf="Kenward-Roger")
-# pairs(emmeans(mod.12.noKNZ,pairwise~period_12|Site))
-
-anova(mod.12,ddf="Kenward-Roger")
-# summary(mod.12)
-r.squaredGLMM(mod.12)
-pairs(emmeans(mod.12,pairwise~period_12|Site))
-
-# 2013 #
-mod.13<-lmer(log(ANPP)~Site*period_13+Block.ID+(1|Plot.ID)+(1|Plot.ID:period_13),data=anpp.12.13.sub)
-mod.13<-lmer(log(ANPP)~Site*period_13+(1|Block.ID)+(1|Block.ID:Plot.ID),data=anpp.12.13.sub)
-
-mod.13<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID),data=anpp.12.13.sub)
-plot(mod.13)
-qqnorm(resid(mod.13));qqline(resid(mod.13))
-
-# mod.13.noKNZ<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID),data=subset(anpp.12.13.sub,Site!="KNZ"))
-# anova(mod.13.noKNZ,ddf="Kenward-Roger")
-# pairs(emmeans(mod.13,pairwise~period_13|Site))
-
-anova(mod.13,ddf="Kenward-Roger")
-r.squaredGLMM(mod.13)
-pairs(emmeans(mod.13,pairwise~period_13|Site))
-
-avs<-anpp.12.13.sub%>%
-  group_by(Site,period_13)%>%
-  dplyr::summarise(
-    n.plots.over.yrs=n(),
-    av=mean(ANPP))
-
-ANPP_PPT_adj<-ANPP_PPT%>%
-  mutate(period_13=ifelse(Year=="2013","2013","comp_yrs"))%>%
-  mutate(period_12=ifelse(Year=="2012","2012","comp_yrs"))
-
-avs_adj<-ANPP_PPT_adj%>%
-  filter(comb_TRT_by_period=="con")%>%
-  group_by(Site,period_13)%>%
-  dplyr::summarise(
-    n.plots.over.yrs=n(),
-    av=mean(ANPP)
-  )
-
-ANPP_9_LTAs_no_13
 ```
