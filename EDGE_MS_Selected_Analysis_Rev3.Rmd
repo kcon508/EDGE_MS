@@ -1,0 +1,1063 @@
+---
+title: "EDGE Manuscript Final Oecologia Analyses"
+author: "Kathy Condon"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(tidyverse)
+library(dplyr)
+library(car)
+library(emmeans)
+library(multcomp)
+library(lmerTest)
+library(lme4)
+library(RColorBrewer)
+library(rstatix)
+library(tidyr)
+library(ggpubr)
+library(lubridate)
+library(ggtext)
+library(ggh4x)
+library(MuMIn)
+
+my_theme<-theme(strip.background=element_blank(),
+        strip.text.x=element_text(size=20,hjust=0,face="bold"),
+        strip.text.y=element_text(size=20,hjust=0,face="bold"),
+        panel.background=element_rect(fill="transparent"),
+        plot.background=element_rect(fill="transparent",color=NA),
+        legend.background=element_rect(fill="transparent",
+                                       linewidth=0.5),
+        legend.position="none",
+        legend.title=element_text(size=30,face="bold"),
+        legend.text=element_text(size=15),
+        axis.line=element_line(linewidth=1.5),
+        axis.ticks=element_line(linewidth=1.5),
+        axis.title = element_text(size=30),
+        axis.text=element_text(size=20,colour="black"),
+        axis.text.x=element_text(angle=45,hjust=1),
+        plot.title=element_text(size=25))
+
+```
+
+#### Climate Variables ******************************
+```{r Precipitation data processing, include=FALSE}
+FULL_precip<-read.csv("/Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/MS Data/EDGE_MS_full_NOAA_EDGE_precipitation.csv")
+str(FULL_precip) # 52,595 observations
+range(FULL_precip$DATE) # 1/1/1990 through 12/31/2021
+
+PPT_avs<-read.csv("/Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/MS Data/EDGE_MS_yearly_ppt_avs.csv")
+str(PPT_avs) # 144 observations
+```
+
+```{r Precipitaiton averages, include=FALSE}
+#### 30-yr Monthly LTAs ####
+# All months
+monthly.avs<-FULL_precip%>%
+  mutate(new_date=ymd(DATE))%>%
+  mutate(yr=year(new_date))%>%
+  filter(between(yr,1990,2019))%>%
+  group_by(Site,yr,month=month(new_date),amb_drought)%>%
+  dplyr::summarise(
+    month.days=n(),
+    month.tot=sum(daily.tot))
+
+monthly.avs
+
+monthly.LTA<-monthly.avs%>%
+  group_by(Site,month,amb_drought)%>%
+  mutate(amb_drought=factor(amb_drought,levels=c("amb_adjusted","drought")))%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  dplyr::summarise(
+    yr.n=n(),
+    av.LTA.precip=mean(month.tot),
+    sd.precip=sd(month.tot),
+    SE.precip=sd.precip/sqrt(yr.n),
+    GROUP="30-yr LTA")%>%
+  filter(yr.n==30)
+
+monthly.LTA
+
+# By season
+monthly.tots<-monthly.avs%>%
+  mutate(season=case_when(
+    month %in% c(3:5) ~ "spring",
+    month %in% c(6:8) ~ "summer",
+    month %in% c(9:11) ~ "fall",
+    month %in% c(1:2,12) ~ "winter"))%>%
+  group_by(Site,yr,season,amb_drought)%>%
+  dplyr::summarise(
+    months=n(),
+    season.total=sum(month.tot))%>%
+  filter(amb_drought=="amb_adjusted")
+
+monthly.tots
+
+seasonal.LTAs<-monthly.tots%>%
+  group_by(Site,season)%>%
+  dplyr::summarise(
+    yrs=n(),
+    seasonal.LTA=mean(season.total),
+    seasonal.SE=((sd(season.total))/sqrt(yrs)))
+
+#### EDGE Years Monthly Totals ####
+# All months
+EDGE.monthly.tots<-FULL_precip%>%
+  mutate(new_date=ymd(DATE))%>%
+  mutate(yr=year(new_date))%>%
+  filter(between(yr,2014,2017))%>%
+  group_by(Site,yr,month=month(new_date),amb_drought)%>%
+  dplyr::summarise(
+    month.days=n(),
+    month.tot=sum(daily.tot))
+
+EDGE.monthly.tots
+
+EDGE.monthly.avs<-EDGE.monthly.tots%>%
+  group_by(Site,month,amb_drought)%>%
+  mutate(amb_drought=factor(amb_drought,levels=c("amb_adjusted","drought")))%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  dplyr::summarise(
+    yr.n=n(),
+    av.EDGE.precip=mean(month.tot),
+    sd.precip=sd(month.tot),
+    SE.precip=sd.precip/sqrt(yr.n),
+    GROUP="EDGE averages")%>%
+  filter(amb_drought=="drought")
+
+EDGE.monthly.avs
+
+# By season
+EDGE.seasonal.tots<-EDGE.monthly.tots%>%
+  mutate(season = case_when(
+    month %in% c(3:5) ~ "spring",
+    month %in% c(6:8) ~ "summer",
+    month %in% c(9:11) ~ "fall",
+    month %in% c(1:2,12) ~ "winter"))%>%
+  group_by(Site,yr,season,amb_drought)%>%
+  dplyr::summarise(
+    months=n(),
+    season.total.EDGE=sum(month.tot))%>%
+  filter(amb_drought=="drought")
+
+
+#### 2012 Monthly Totals ####
+# All months
+monthly.12.tots<-FULL_precip%>%
+  mutate(new_date=ymd(DATE))%>%
+  mutate(yr=year(new_date))%>%
+  filter(yr==2012)%>%
+  group_by(Site,yr,month=month(new_date),amb_drought)%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  dplyr::summarise(
+    month.days=n(),
+    month.tot.2012=sum(daily.tot),
+    GROUP="2012")
+
+# By season
+seasonal.12.tots<-monthly.12.tots%>%
+  mutate(season=case_when(
+    month %in% c(3:5) ~ "spring",
+    month %in% c(6:8) ~ "summer",
+    month %in% c(9:11) ~ "fall",
+    month %in% c(1:2,12) ~ "winter"))%>%
+  group_by(Site,yr,season,amb_drought)%>%
+  dplyr::summarise(
+    months=n(),
+    season.total.2012=sum(month.tot.2012))
+
+#### Bind Seasonal Totals ####
+str(EDGE.seasonal.tots)
+str(seasonal.LTAs)
+str(seasonal.12.tots)
+
+seasonal<-merge(EDGE.seasonal.tots,seasonal.LTAs,by=c("Site","season"))
+seasonal.precip.dat<-merge(seasonal,seasonal.12.tots,by=c("Site","season"))
+str(seasonal.precip.dat)
+
+seasonal.precip.dat<-seasonal.precip.dat%>%
+  select(all_of(c("Site","season","season.total.EDGE","seasonal.LTA","season.total.2012")))
+
+
+#### 30-yr LTAs ####
+PPT_30_LTAs<-PPT_avs%>%
+  group_by(Site,amb_drought)%>%
+  filter(between(yr,1990,2019))%>%
+  dplyr::summarise(
+    yrs=n(),
+    an.LTA=mean(an.tot),
+    SE.an=((sd(an.tot))/sqrt(yrs)),
+    gs.LTA=mean(gs.tot),
+    SE.gs=((sd(gs.tot))/sqrt(yrs)))%>%
+  filter(amb_drought=="amb_adjusted")
+
+PPT_30_LTAs
+
+#### 10-yr LTAs ####
+PPT_10_LTAs<-PPT_avs%>%
+  filter(between(yr,2012,2021))%>%
+  group_by(Site,amb_drought)%>%
+  dplyr::summarise(
+    yrs=n(),
+    an.LTA=mean(an.tot),
+    SE.an=((sd(an.tot))/sqrt(yrs)),
+    gs.LTA=mean(gs.tot),
+    SE.gs=((sd(gs.tot))/sqrt(yrs)))%>%
+  filter(amb_drought=="amb_adjusted")
+
+PPT_10_LTAs
+```
+
+```{r Seasonal precipitation % of LTA, include=FALSE}
+#### Calculate % of LTA from seasonal totals ####
+seasonal_percLTAs<-seasonal.precip.dat%>%
+  mutate(perc_LTA_12=
+           (season.total.2012/seasonal.LTA)*100)%>%
+  mutate(perc_LTA_EDGE=
+           (season.total.EDGE/seasonal.LTA)*100)%>%
+  filter(season %in% c("spring","summer"))
+
+seasonal_percLTA_pivot<-pivot_longer(seasonal_percLTAs,cols=c("perc_LTA_12","perc_LTA_EDGE"),names_to="category")
+
+#### Average seasonal totals 2012 vs. 2014-2017 ####
+seasonal_graphing_avs<-seasonal_percLTA_pivot%>%
+  group_by(Site,season,category)%>%
+  dplyr::summarise(
+    yrs=n(),
+    seasonal.av=mean(value),
+    seasonal.sd=sd(value),
+    seasonal.SE=(seasonal.sd/sqrt(yrs)))
+
+#### Graphing Seasonal Precipitation Data ####
+gr_dat<-seasonal_graphing_avs
+gr_dat<-gr_dat%>%
+  mutate(site.labs=case_when(
+    Site == "CHY" ~ "HPG",
+    Site %in% c("KNZ","HYS","SGS") ~ Site))%>%
+  mutate(site.labs=factor(site.labs,
+                          levels=c("KNZ","HYS","HPG","SGS")))%>%
+  mutate(nat_exp=case_when(
+    category == "perc_LTA_12" ~ "natural",
+    category == "perc_LTA_EDGE" ~ "experimental"))%>%
+  mutate(nat_exp=factor(nat_exp,
+                        levels=c("natural","experimental")))
+
+x.var=gr_dat$nat_exp
+y.var=gr_dat$seasonal.av
+y.SE=gr_dat$seasonal.SE
+point.y=100
+point.x=1.5
+ylab="% of LTA precip"
+group=gr_dat$season
+
+perc_LTA_bars<-ggplot(data=gr_dat,aes(x=x.var,y=y.var,fill=group))+
+  annotate("rect",xmin=1.5,xmax=Inf,ymin=-Inf,ymax=Inf,fill="lightblue1")+
+  geom_bar(position="dodge",color="black",stat="identity",width=0.75,linewidth=1)+
+  geom_errorbar(aes(ymin=y.var-y.SE,ymax=y.var+y.SE),position=position_dodge(0.75),width=0,linewidth=1)+
+  geom_point(aes(x=point.x,y=point.y),alpha=0)+
+  scale_fill_manual(name="",values=c("gray90","gray50"),labels=c("Spring (March-May)","Summer (June-August)"))+
+  labs(x="",y=ylab)+
+  scale_x_discrete(labels=c("2012","14-17\naverage"))+
+  theme_classic()+
+  my_theme+
+  theme(plot.margin=unit(c(0.25,0.4,0.25,0.25),"in"),
+        axis.text.x=element_text(angle=0,hjust=0.5),
+        legend.position="inside",
+        legend.position.inside=c(0.06,-0.1))+
+  facet_wrap(~site.labs,ncol=2,scales="free")
+
+perc_LTA_bars
+
+#### Export Seasonal Precip % of LTA Graph (Fig S2) ####
+# ggsave(perc_LTA_bars,filename="Plots/EDGE_MS_Rev2_FigS2.pdf",bg="transparent",width=8,height=6)
+```
+
+```{r PRISM Data, include=FALSE}
+#### PRISM Data #### 
+daily.vpd<-read.csv("/Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/EDGE_PRISM_LTAs/EDGE_PRISM_allsites_daily_values.csv")
+
+str(daily.vpd)
+
+## convert data types & scale VPD ##
+daily.vpd$Date<-as.Date(daily.vpd$Date,format="%m/%d/%y")
+daily.vpd$vpd_min<-(daily.vpd$vpd_min*0.1)
+daily.vpd$vpd_max<-(daily.vpd$vpd_max*0.1)
+daily.vpd$vpd_mean<-((daily.vpd$vpd_min+daily.vpd$vpd_max)/2)
+
+#### Every Year - GS VPD and GST ####
+PRISM_gs_avs<-daily.vpd%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"04-01",sep="-")),
+    ymd(paste(first(yr),"09-15",sep="-"))))%>%
+  summarise(n=n(),
+            t.mean=mean(tmean),
+            SE_tmean=(sd(tmean))/sqrt(n),
+            min_vpd=mean(vpd_min),
+            SE_min_vpd=(sd(vpd_min))/sqrt(n),
+            max_vpd=mean(vpd_max),
+            SE_max_vpd=(sd(vpd_max))/sqrt(n),
+            mean_vpd=mean(vpd_mean),
+            SE_mean_vpd=(sd(vpd_mean))/sqrt(n))
+
+#### Every Year - Annual VPD and MAT ####
+PRISM_an_avs<-daily.vpd%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"01-01",sep="-")),
+    ymd(paste(first(yr),"12-31",sep="-"))))%>%
+  summarise(n=n(),
+            t.mean=mean(tmean),
+            SE_tmean=(sd(tmean))/sqrt(n),
+            min_vpd=mean(vpd_min),
+            SE_min_vpd=(sd(vpd_min))/sqrt(n),
+            max_vpd=mean(vpd_max),
+            SE_max_vpd=(sd(vpd_max))/sqrt(n),
+            mean_vpd=mean(vpd_mean),
+            SE_mean_vpd=(sd(vpd_mean))/sqrt(n))
+
+str(PRISM_gs_avs) # 124 observations -- now 128?? 1/30/2025
+str(PRISM_an_avs) # 124 observations
+
+## Assign natural vs. experimental drought ## 
+### Annual ###
+PRISM_an_avs$nat_exp<-NA
+
+PRISM_an_avs<-PRISM_an_avs%>%
+  mutate(nat_exp=case_when(
+    yr %in% c(2012,2013) ~ "natural",
+    yr %in% c(2014,2015,2016,2017) ~ "experimental"))%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))
+
+str(PRISM_an_avs)
+
+### Growing Season ###
+PRISM_gs_avs$nat_exp<-NA
+
+PRISM_gs_avs<-PRISM_gs_avs%>%
+  mutate(nat_exp=case_when(
+    yr %in% c(2012,2013) ~ "natural",
+    yr %in% c(2014,2015,2016,2017) ~ "experimental"))%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))
+
+#### 10-yr averages ####
+PRISM_an_10<-PRISM_an_avs%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  filter(yr %in% c(2012:2021))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean_temp=mean(t.mean),
+    SE_temp=(sd(t.mean))/sqrt(n),
+    mean_minvpd=mean(min_vpd),
+    SE_mean_minvpd=(sd(min_vpd))/sqrt(n),
+    mean_maxvpd=mean(max_vpd),
+    SE_mean_maxvpd=(sd(max_vpd))/sqrt(n),
+    mean_meanvpd=mean(mean_vpd),
+    SE_mean_meanvpd=(sd(mean_vpd))/sqrt(n),
+    GROUP="10-yr annual averages")
+
+PRISM_gs_10<-PRISM_gs_avs%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  filter(yr %in% c(2012:2021))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean_temp=mean(t.mean),
+    SE_temp=(sd(t.mean))/sqrt(n),
+    mean_minvpd=mean(min_vpd),
+    SE_mean_minvpd=(sd(min_vpd))/sqrt(n),
+    mean_maxvpd=mean(max_vpd),
+    SE_mean_maxvpd=(sd(max_vpd))/sqrt(n),
+    mean_meanvpd=mean(mean_vpd),
+    SE_mean_meanvpd=(sd(mean_vpd))/sqrt(n),
+    GROUP="10-yr growing season averages")
+
+#### 30-yr averages ####
+PRISM_an_30<-PRISM_an_avs%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  filter(yr %in% c(1990:2019))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean_temp=mean(t.mean),
+    SE_temp=(sd(t.mean))/sqrt(n),
+    mean_minvpd=mean(min_vpd),
+    SE_mean_minvpd=(sd(min_vpd))/sqrt(n),
+    mean_maxvpd=mean(max_vpd),
+    SE_mean_maxvpd=(sd(max_vpd))/sqrt(n),
+    mean_meanvpd=mean(mean_vpd),
+    SE_mean_meanvpd=(sd(mean_vpd))/sqrt(n),
+    GROUP="30-yr annual averages")
+
+PRISM_gs_30<-PRISM_gs_avs%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  filter(yr %in% c(1990:2019))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean_temp=mean(t.mean),
+    SE_temp=(sd(t.mean))/sqrt(n),
+    mean_minvpd=mean(min_vpd),
+    SE_mean_minvpd=(sd(min_vpd))/sqrt(n),
+    mean_maxvpd=mean(max_vpd),
+    SE_mean_maxvpd=(sd(max_vpd))/sqrt(n),
+    mean_meanvpd=mean(mean_vpd),
+    SE_mean_meanvpd=(sd(mean_vpd))/sqrt(n),
+    GROUP="30-yr growing season averages")
+
+```
+
+```{r Figure 2c-d - 2012 vs. EDGE VPD and Temp Table S5, include=TRUE}
+#### Growing Season Daily Data - for stats ####
+vpd.nat_exp.gs<-daily.vpd%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  mutate(new.Date=ymd(Date))%>%
+  group_by(Site,yr=year(new.Date))%>%
+  filter(yr %in% c(2012,2014:2017))%>%
+  filter(new.Date %within% interval(
+    ymd(paste(first(yr),"04-01",sep="-")),
+    ymd(paste(first(yr),"09-15",sep="-"))))%>%
+  mutate(nat_exp=case_when(
+    yr %in% c(2012) ~ "natural",
+    yr %in% c(2014:2017) ~ "experimental"))%>%
+  mutate(nat_exp=factor(nat_exp,levels=c("natural","experimental")))
+
+str(vpd.nat_exp.gs) # 3,360 observations
+
+#### VPD ANOVA - **Fig. 2d / Table S5** ####
+vpd.daily.comps<-lm(vpd_mean~Site*nat_exp,data=vpd.nat_exp.gs)
+Anova(vpd.daily.comps,type=3)
+summary(vpd.daily.comps)
+pairs(emmeans(vpd.daily.comps,pairwise~nat_exp|Site))
+
+#### Temperature ANOVA - **Fig. 2c / Table S5 ** ####
+temp.daily.comps<-lm(tmean~Site*nat_exp,data=vpd.nat_exp.gs)
+Anova(temp.daily.comps,type=3)
+
+## drop interaction for temperature ##
+temp.daily.comps<-lm(tmean~Site+nat_exp,data=vpd.nat_exp.gs)
+Anova(temp.daily.comps,type=3)
+summary(temp.daily.comps)
+```
+
+#### ANPP Comparisons *******************************
+```{r ANPP and PPT Data, include=FALSE}
+#### ANPP Full Data ####
+EDGE_raw<-read.csv("/Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/EDGE_ANPP_2012-2021_allsites_full_clean.csv")
+str(EDGE_raw) # 1179 observations
+
+## convert factor columns ##
+fact.cols<-c("Site","Year","Block","TRT","comb_TRT","TRT_by_period","comb_TRT_by_period","Plot","measured_woody","Unique_ID")
+
+FULL_anpp_wouts<-EDGE_raw%>%
+  mutate_at(fact.cols,factor)
+
+str(FULL_anpp_wouts) 
+
+# drop LTA's & NA's #
+FULL_anpp_wouts<-subset(FULL_anpp_wouts,FULL_anpp_wouts$Block!="LTA")
+
+FULL_anpp_wouts<-FULL_anpp_wouts%>%
+  drop_na("ANPP_w_WOODY")
+
+str(FULL_anpp_wouts) # 1172 observations
+
+#### ANPP Outliers ####
+outliers<-read.csv("/Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/EDGE_outlier_lists.csv")
+
+## subset outlier data ##
+FULL_anpp_no_outs<-FULL_anpp_wouts[!FULL_anpp_wouts$Unique_ID %in% outliers$ANPP_w_woody,]
+
+## select columns to keep
+head(FULL_anpp_no_outs) # 1152 observations - dropped 20 outliers
+anpp.cols.keep<-c("Site","Year","Block","TRT_by_period","comb_TRT_by_period","Plot","ANPP_w_WOODY","C3.GRASSES","C3.TOTAL","C4","TOTAL.GRASSES","FORB","Unique_ID")
+
+FULL_anpp<-FULL_anpp_no_outs%>%
+  select(all_of(anpp.cols.keep))
+
+str(FULL_anpp) # 1152 observations of 13 variables
+
+#### Precip. data ####
+str(PPT_avs) # 144 observations
+
+## Need to match trts to be able to bind together correctly
+PPT_avs_to_combine<-PPT_avs%>%
+  mutate(precip_combining=case_when(
+    yr %in% c(1990:2017) & amb_drought %in% "amb_adjusted" ~ "con",
+    yr %in% c(1990:2017) & amb_drought %in% "drought" ~ "drought",
+    yr %in% c(2018:2021) ~ "con"))%>%
+  rename(Year=yr)
+
+head(PPT_avs_to_combine)
+
+FULL_anpp_to_combine<-FULL_anpp%>%
+  mutate(precip_combining=case_when(
+    Year %in% c(2011:2017) ~ comb_TRT_by_period,
+    Year %in% c(2018:2021) ~ "con"))
+
+## Also match data types
+fct.cols<-c("Site","Year","amb_drought")
+
+PPT_avs_to_combine<-PPT_avs_to_combine%>%
+  mutate_at(fct.cols,factor)
+
+#### Combined ANPP-PPT Data ####
+str(PPT_avs_to_combine)
+str(FULL_anpp_to_combine)
+
+ANPP_PPT<-left_join(FULL_anpp_to_combine,PPT_avs_to_combine,by=c("Site","Year","precip_combining"))
+
+str(ANPP_PPT) # 1152 observations
+```
+
+```{r Combined averages, include=FALSE}
+#### Yearly Averages ####
+ANPP_PPT<-ANPP_PPT%>%
+  rename(ANPP=ANPP_w_WOODY)
+
+ANPP_PPT.avs<-ANPP_PPT%>%
+  group_by(Site,Year,comb_TRT_by_period)%>%
+  dplyr::summarise(
+    n.plots=n(),
+    ANPP.av=mean(ANPP),
+    ANPP.sd=sd(ANPP),
+    ANPP.SE=ANPP.sd/sqrt(n.plots),
+    av.tot.ppt=mean(an.tot),
+    sd.tot.ppt=sd(an.tot),
+    SE.tot.ppt=sd.tot.ppt/sqrt(n.plots),
+    av.gs.ppt=mean(gs.tot),
+    sd.gs.ppt=sd(gs.tot),
+    SE.gs.ppt=sd.gs.ppt/sqrt(n.plots),
+    GROUP="ANPP_PPT_combined_averages")
+
+str(ANPP_PPT.avs) # 72 observations
+
+#### 10-yr ANPP LTAs ####
+ANPP_10_LTAs<-ANPP_PPT.avs%>%
+  group_by(Site,comb_TRT_by_period)%>%
+  dplyr::summarise(
+    n.yrs=n(),
+    ANPP.LTA=mean(ANPP.av),
+    LTA.sd=sd(ANPP.av),
+    LTA.SE=LTA.sd/sqrt(n.yrs),
+    tot.LTA=mean(av.tot.ppt),
+    sd.tot.ppt=sd(av.tot.ppt),
+    SE.tot.ppt=sd.tot.ppt/sqrt(n.yrs),
+    gs.LTA=mean(av.gs.ppt),
+    sd.gs.ppt=sd(av.gs.ppt),
+    SE.gs.ppt=sd.gs.ppt/sqrt(n.yrs),
+    GROUP="ANPP_10-yr_AVS")%>%
+  filter(comb_TRT_by_period=="con")
+
+ANPP_10_LTAs
+
+#### 9-yr ANPP LTAs for Stats ####
+ANPP_9_LTAs_no_12<-subset(ANPP_PPT.avs,Year!="2012")%>%
+  group_by(Site,comb_TRT_by_period)%>%
+  dplyr::summarise(
+    n.yrs=n(),
+    ANPP.LTA=mean(ANPP.av),
+    LTA.sd=sd(ANPP.av),
+    LTA.SE=LTA.sd/sqrt(n.yrs),
+    tot.LTA=mean(av.tot.ppt),
+    sd.tot.ppt=sd(av.tot.ppt),
+    SE.tot.ppt=sd.tot.ppt/sqrt(n.yrs),
+    gs.LTA=mean(av.gs.ppt),
+    sd.gs.ppt=sd(av.gs.ppt),
+    SE.gs.ppt=sd.gs.ppt/sqrt(n.yrs),
+    GROUP="ANPP_10-yr_AVS")%>%
+  filter(comb_TRT_by_period=="con")
+
+ANPP_9_LTAs_no_13<-subset(ANPP_PPT.avs,Year!="2013")%>%
+  group_by(Site,comb_TRT_by_period)%>%
+  dplyr::summarise(
+    n.yrs=n(),
+    ANPP.LTA=mean(ANPP.av),
+    LTA.sd=sd(ANPP.av),
+    LTA.SE=LTA.sd/sqrt(n.yrs),
+    tot.LTA=mean(av.tot.ppt),
+    sd.tot.ppt=sd(av.tot.ppt),
+    SE.tot.ppt=sd.tot.ppt/sqrt(n.yrs),
+    gs.LTA=mean(av.gs.ppt),
+    sd.gs.ppt=sd(av.gs.ppt),
+    SE.gs.ppt=sd.gs.ppt/sqrt(n.yrs),
+    GROUP="ANPP_10-yr_AVS")%>%
+  filter(comb_TRT_by_period=="con")
+
+ANPP_9_LTAs_no_12
+ANPP_9_LTAs_no_13
+
+## Combine 9-yr averages into individual columns to add to ANPP_10_LTAs dataframe (and merge with precip later) 
+ANPP_no12<-ANPP_9_LTAs_no_12%>%
+  select(all_of(c("Site","ANPP.LTA","LTA.sd","LTA.SE")))%>%
+  rename(ANPP.LTA.no12=ANPP.LTA,
+         LTA.no12.sd=LTA.sd,
+         LTA.no12.SE=LTA.SE)
+
+ANPP_no13<-ANPP_9_LTAs_no_13%>%
+  select(all_of(c("Site","ANPP.LTA","LTA.sd","LTA.SE")))%>%
+  rename(ANPP.LTA.no13=ANPP.LTA,
+         LTA.no13.sd=LTA.sd,
+         LTA.no13.SE=LTA.SE)
+
+ANPP_LTAs_1<-merge(ANPP_10_LTAs,ANPP_no12,by="Site")
+ANPP_LTAs<-merge(ANPP_LTAs_1,ANPP_no13,by="Site")
+ANPP_LTAs
+```
+
+```{r ANPP Sensitivity - g/m2/mm comparisons, include=FALSE}
+#### Set up data for g/m2/mm calculations ####
+## Use ANPP-PPT combined (all plots) data
+str(ANPP_PPT)
+## Fill KNZ 2012 with Blocks 1-5
+ANPP_PPT[c(584:588),3]<-c(1:5)
+
+#### Set up g/m2/mm data
+## Average plots in each block so each block has 1 control value and 1 drought value (each block = 1 chr drought, 1 int drought, and 1 con -- so combing these now so each drought plot is an average of the 2)
+ANPP_PPT_droughts_combined<-ANPP_PPT%>%
+  group_by(Site,Year,Block,comb_TRT_by_period)%>%
+  dplyr::summarise(
+    ANPP.n=n(),
+    ANPP.av=mean(ANPP),
+    ANPP.SE=((sd(ANPP))/sqrt(ANPP.n)),
+    annual.plot.ppt=mean(an.tot),
+    gs.plot.ppt=mean(gs.tot))
+
+str(ANPP_PPT_droughts_combined) # 706 observations  (715 expected, minus 9 outliers or missing plots OK)
+
+## Pivot wide
+dat_wide<-ANPP_PPT_droughts_combined%>%
+  pivot_wider(names_from=comb_TRT_by_period,values_from=c(ANPP.av,ANPP.n,ANPP.SE,annual.plot.ppt,gs.plot.ppt))
+
+str(dat_wide) # 395 observations
+
+## Assign 10-yr ANPP values
+dat_wide.comb<-merge(dat_wide,ANPP_LTAs,by="Site")
+str(dat_wide.comb) # 395 observations
+
+## Fill in missing control plots w/ 10-yr ANPP averages (missing control plots were likely dropped for outliers or missing plots from OG data -- missing drought plots were compensated for already b/c would take only chr or int plot instead of averaging both of them)
+dat_wide.comb$con_ANPP_2<-ifelse(
+  is.na(dat_wide.comb$ANPP.av_con),
+  dat_wide.comb$ANPP.LTA,
+  dat_wide.comb$ANPP.av_con)
+
+## Assign 30-yr Precip values
+dat_wide.comb2<-merge(dat_wide.comb,PPT_30_LTAs,by="Site")
+str(dat_wide.comb2)
+
+### Rename and choose columns to keep
+drop.cols<-c("LTA.sd","sd.tot.ppt","sd.gs.ppt")
+
+dat_wide.comb3<-dat_wide.comb2%>%
+  rename(con_ANPP=con_ANPP_2,
+         drought_ANPP=ANPP.av_drought,
+         ANPP.10.LTA=ANPP.LTA,
+         ANPP.10.SE=LTA.SE,
+         tot.ppt.10.LTA=tot.LTA,
+         tot.ppt.10.SE=SE.tot.ppt,
+         gs.ppt.10.LTA=gs.LTA.x,
+         gs.ppt.10.SE=SE.gs.ppt,
+         precip.yrs=yrs,
+         tot.ppt.30.LTA=an.LTA,
+         tot.ppt.30.SE=SE.an,
+         gs.ppt.30.LTA=gs.LTA.y,
+         gs.ppt.30.SE=SE.gs)%>%
+  select(!all_of(drop.cols))
+
+## Check missing yearly precip and gs precip values
+subset(dat_wide.comb3,is.na(dat_wide.comb3$annual.plot.ppt_con))
+subset(dat_wide.comb3,is.na(dat_wide.comb3$gs.plot.ppt_con))
+
+## Fill in missing precipitation values (from missing control plots)
+dat_wide.comb4<-dat_wide.comb3%>%
+  fill(annual.plot.ppt_con,.direction="up")%>%
+  fill(gs.plot.ppt_con,.direction="up")
+
+str(dat_wide.comb4) # 395 observations
+
+## Check missing values again
+subset(dat_wide.comb4,is.na(dat_wide.comb4$annual.plot.ppt_con)) # none 
+subset(dat_wide.comb4,is.na(dat_wide.comb4$gs.plot.ppt_con)) # none
+
+#### Calculate g/m2/mm reductions ####
+ANPP_PPT_reductions<-dat_wide.comb4%>%
+  mutate(g_m2_reduction=case_when(
+    Year %in% c("2012","2013") ~ (con_ANPP-ANPP.10.LTA),
+    Year %in% c("2014","2015","2016","2017","2018","2019","2020","2021") ~ (drought_ANPP-con_ANPP)))%>%
+  mutate(precip_reduction=case_when(
+    Year %in% c("2012","2013","2018","2019","2020","2021") ~ (annual.plot.ppt_con-tot.ppt.30.LTA),
+    Year %in% c("2014","2015","2016","2017") ~ (annual.plot.ppt_drought-annual.plot.ppt_con)))%>%
+  mutate(stats_reduction=case_when(
+    Year %in% c("2012") ~ (con_ANPP-ANPP.LTA.no12),
+    Year %in% c("2013") ~ (con_ANPP-ANPP.LTA.no13),
+    Year %in% c("2014","2015","2016","2017","2018","2019","2020","2021") ~ (drought_ANPP-con_ANPP)))
+
+ANPP_PPT_reductions$GRAPH_g_m2_mm<-(ANPP_PPT_reductions$g_m2_reduction/ANPP_PPT_reductions$precip_reduction)
+ANPP_PPT_reductions$STATS_g_m2_mm<-(ANPP_PPT_reductions$stats_reduction/ANPP_PPT_reductions$precip_reduction)
+
+subset(ANPP_PPT_reductions,is.na(GRAPH_g_m2_mm)) # none
+subset(ANPP_PPT_reductions,is.na(STATS_g_m2_mm)) # none
+
+#### Check data ####
+str(FULL_anpp) # 1152 observations
+str(ANPP_PPT_reductions) # 395 observations 
+```
+
+#### Stats *******************************
+```{r Figure 1 ANPP - MAP, include=TRUE}
+#### OG and R1 equations - **Fig 1 / Table S1**  ####
+anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=ANPP_PPT.avs)
+summary(anpp.ppt)
+
+CHY.anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=subset(ANPP_PPT.avs,Site=="CHY"))
+summary(CHY.anpp.ppt)
+
+KNZ.anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=subset(ANPP_PPT.avs,Site=="KNZ"))
+summary(KNZ.anpp.ppt)
+
+HYS.anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=subset(ANPP_PPT.avs,Site=="HYS"))
+summary(HYS.anpp.ppt)
+
+SGS.anpp.ppt<-lm(ANPP.av~av.tot.ppt,data=subset(ANPP_PPT.avs,Site=="SGS"))
+summary(SGS.anpp.ppt)
+```
+
+```{r Figure 2b - Climate Variables (precip only - see VPD and temp above), include=TRUE}
+#### Calculate precipitation % of LTA ####
+str(PPT_avs)
+str(PPT_30_LTAs)
+
+PPT_comps<-merge(x=PPT_avs,y=PPT_30_LTAs[,c("Site","an.LTA","SE.an","gs.LTA","SE.gs")],by="Site")
+
+PPT_comps<-PPT_comps%>%
+  mutate(perc_LTA=((an.tot/an.LTA))*100)%>%
+  filter(yr %in% c(2012,2014:2017))%>%
+  mutate(drought.yrs=case_when(
+    yr == 2012 ~ "drought",
+    yr %in% c(2014:2017) ~ amb_drought))%>%
+  filter(drought.yrs == "drought")
+
+PPT_comps_avs<-PPT_comps%>%
+  group_by(Site,amb_drought)%>%
+  dplyr::summarise(
+    n.yrs=n(),
+    av.reduction=mean(perc_LTA),
+    SE.reduction=((sd(perc_LTA))/sqrt(n.yrs)))
+
+#### T-tests 2012 known again 2014-2017 average - **Fig 2b / Table S5** ####
+KNZ_comps_12<-subset(PPT_comps,Site=="KNZ" & amb_drought=="amb_adjusted")
+KNZ_comps<-subset(PPT_comps,Site=="KNZ" & amb_drought=="drought")
+
+HYS_comps_12<-subset(PPT_comps,Site=="HYS" & amb_drought=="amb_adjusted")
+HYS_comps<-subset(PPT_comps,Site=="HYS" & amb_drought=="drought")
+
+CHY_comps_12<-subset(PPT_comps,Site=="CHY" & amb_drought=="amb_adjusted")
+CHY_comps<-subset(PPT_comps,Site=="CHY" & amb_drought=="drought")
+
+SGS_comps_12<-subset(PPT_comps,Site=="SGS" & amb_drought=="amb_adjusted")
+SGS_comps<-subset(PPT_comps,Site=="SGS" & amb_drought=="drought")
+
+t.test(KNZ_comps$perc_LTA,mu=KNZ_comps_12$perc_LTA)
+t.test(HYS_comps$perc_LTA,mu=HYS_comps_12$perc_LTA)
+t.test(CHY_comps$perc_LTA,mu=CHY_comps_12$perc_LTA)
+t.test(SGS_comps$perc_LTA,mu=SGS_comps_12$perc_LTA)
+
+# could also do with alternative = "less" to check one-sided hypothesis. But OG manuscript alternative = two sided, not specified
+```
+
+```{r Figure 3a - ANPP over all years, include=TRUE}
+## Assign unique ID's for Block random effects (when modeling with all Sites Block/Plot #'s would repeat)
+ANPP_PPT$Block.ID<-paste(ANPP_PPT$Site,ANPP_PPT$Block,sep=".")
+ANPP_PPT$Plot.ID<-paste(ANPP_PPT$Site,ANPP_PPT$Plot,sep=".")
+
+#### 2012 vs. 2013 **Fig. 3a / Table S6** ####
+ANPP_PPT_12.13<-ANPP_PPT[ANPP_PPT$Year %in% c("2012","2013"),]
+## subset out KNZ b/c not repeated measures there ##
+# ANPP_PPT_12.13<-subset(ANPP_PPT_12.13,Site!="KNZ")
+
+## Check Site*Year interaction (no treatment b/c no treatment in 2012 or 2013, the Year fixed effect checks 2012 drought vs. 2013 recovery)
+mod.12to13<-lmer(log(ANPP)~Site*Year+(1|Plot.ID),data=ANPP_PPT_12.13)
+anova(mod.12to13,ddf="Kenward-Roger")
+summary(mod.12to13)
+r.squaredGLMM(mod.12to13)
+pairs(emmeans(mod.12to13,pairwise~Year|Site))
+
+#### Trt Differences 2014-2017 **Fig. 3a / Table S6** ####
+ANPP_PPT_14.17<-ANPP_PPT[ANPP_PPT$Year %in% c("2014","2015","2016","2017"),]
+
+mod.14to17<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT_14.17)
+anova(mod.14to17,ddf="Kenward-Roger")
+r.squaredGLMM(mod.14to17)
+pairs(emmeans(mod.14to17,pairwise~comb_TRT_by_period|Year|Site))
+
+#### Trt Differences 2018-2021 **Fig. 3a / Table S6** ####
+ANPP_PPT_18.21<-ANPP_PPT[ANPP_PPT$Year %in% c("2018","2019","2020","2021"),]
+
+mod.18to21<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT_18.21)
+anova(mod.18to21,ddf="Kenward-Roger")
+r.squaredGLMM(mod.18to21)
+pairs(emmeans(mod.18to21,pairwise~comb_TRT_by_period|Year|Site))
+```
+
+```{r Figure 3b - 2012 vs LTAs, include=TRUE}
+#### ANOVAs 2012 vs 9-yrs and 2013 vs. 9 yrs ***Table S7*** ####
+str(ANPP_PPT)
+
+# Subset and label data
+nine.yr.dat<-ANPP_PPT%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  filter(comb_TRT_by_period=="con")%>%
+  mutate(period_12=case_when(
+    Year == 2012 ~ "2012",
+    Year %in% c(2013:2021) ~ "comp.yrs"))%>%
+  mutate(period_13=case_when(
+    Year == 2013 ~ "2013",
+    Year %in% c(2012,2014:2021) ~ "comp.yrs"))
+str(nine.yr.dat)
+
+# 2012 #
+mod.12<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID),data=nine.yr.dat)
+mod.12.rev3<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID/period_12),data=nine.yr.dat)
+anova(mod.12,ddf="Kenward-Roger")
+anova(mod.12.rev3,ddf="Kenward-Roger")
+pairs(emmeans(mod.12,pairwise~period_12|Site))
+pairs(emmeans(mod.12.rev3,pairwise~period_12|Site))
+
+# 2013 #
+mod.13<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID),data=nine.yr.dat)
+mod.13.rev3<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID/period_13),data=nine.yr.dat)
+anova(mod.13,ddf="Kenward-Roger")
+anova(mod.13.rev3,ddf="Kenward-Roger")
+pairs(emmeans(mod.13,pairwise~period_13|Site))
+pairs(emmeans(mod.13.rev3,pairwise~period_13|Site))
+```
+
+```{r Figure 3b - DROUGHTS natural vs. experimental gm-2mm-1 reductions, include=TRUE}
+#### Label data ####
+ANPP_PPT_reductions
+
+ANPP_PPT_12vs14to17<-ANPP_PPT_reductions%>%
+  filter(Year %in% c("2012","2014","2015","2016","2017"))%>%
+  mutate(nat_exp=case_when(
+    Year %in% 2012 ~ "natural",
+    Year %in% c(2014:2017) ~ "experimental"))%>%
+  mutate(Block.ID=paste(Site,Block,sep="."))
+
+redu.12vs14<-ANPP_PPT_12vs14to17%>%
+  filter(Year %in% c(2012,2014))
+
+graph_12vs14<-ANPP_PPT_12vs14to17%>%
+  filter(Year %in% c(2012,2014))%>%
+  group_by(Site,nat_exp)%>%
+  dplyr::summarise(
+    n.blocks=n(),
+    av=mean(GRAPH_g_m2_mm),
+    SE=((sd(GRAPH_g_m2_mm))/sqrt(n.blocks)),
+    period="2012 vs. 2014")
+
+graph_12vs14to17<-ANPP_PPT_12vs14to17%>%
+  filter(Year %in% c(2012,2014:2017))%>%
+  group_by(Site,nat_exp)%>%
+  dplyr::summarise(
+    n.blocks=n(),
+    av=mean(GRAPH_g_m2_mm),
+    SE=((sd(GRAPH_g_m2_mm))/sqrt(n.blocks)),
+    period="2012 vs. 2014-2017")
+
+table(redu.12vs14$Block.ID,redu.12vs14$nat_exp) # all blocks have data except missing KNZ plots (only 5 blocks instead of 10)
+#### Sensitivity Stats - 12 vs. 14 - **Fig. 4 / Table S8** ####
+## All together ##
+all.sensitivity<-lmer((STATS_g_m2_mm^(1/3))~Site*nat_exp+(1|Block.ID),data=redu.12vs14)
+# all.sensitivity.rev3<-lmer((STATS_g_m2_mm^(1/3))~Site*nat_exp+(1|Block.ID/nat_exp),data=redu.12vs14)
+anova(all.sensitivity,ddf="Kenward-Roger")
+
+# drop interaction not significant # 
+all.sensitivity<-lmer((STATS_g_m2_mm^(1/3))~Site+nat_exp+(1|Block.ID),data=redu.12vs14)
+anova(all.sensitivity,ddf="Kenward-Roger")
+
+r.squaredGLMM(all.sensitivity)
+pairs(emmeans(all.sensitivity,pairwise~nat_exp))
+
+## Drop KNZ ##
+three.sensitivity<-lmer((STATS_g_m2_mm)~Site*nat_exp+(1|Block.ID),data=subset(redu.12vs14,Site!="KNZ"))
+anova(three.sensitivity,ddf="Kenward-Roger")
+pairs(emmeans(three.sensitivity,pairwise~nat_exp|Site))
+
+three.sensitivity<-lmer((STATS_g_m2_mm)~Site+nat_exp+(1|Block.ID),data=subset(redu.12vs14,Site!="KNZ"))
+anova(three.sensitivity,ddf="Kenward-Roger")
+pairs(emmeans(three.sensitivity,pairwise~nat_exp))
+
+## Check KNZ alone ##
+KNZ.sen.12vs14.NAT<-subset(redu.12vs14,Site=="KNZ" & nat_exp=="natural")
+KNZ.sen.12vs14.EXP<-subset(redu.12vs14,Site=="KNZ" & nat_exp=="experimental")
+
+t.test(KNZ.sen.12vs14.NAT$STATS_g_m2_mm,KNZ.sen.12vs14.EXP$STATS_g_m2_mm)
+
+#### Sensitivity Stats - 12 vs. 14-17 - **Fig. 4 / Table S8** ####
+## All together ##
+all.sensitivity<-lmer(STATS_g_m2_mm~Site+nat_exp+(1|Block.ID),data=ANPP_PPT_12vs14to17)
+anova(all.sensitivity,ddf="Kenward-Roger")
+pairs(emmeans(all.sensitivity,pairwise~nat_exp))
+
+## Drop KNZ ##
+three.sensitivity<-lmer(STATS_g_m2_mm~Site+nat_exp+(1|Block.ID),data=subset(ANPP_PPT_12vs14to17,Site!="KNZ"))
+anova(three.sensitivity,ddf="Kenward-Roger")
+pairs(emmeans(three.sensitivity,pairwise~nat_exp))
+
+## Check KNZ alone ##
+KNZ.sen.12vs14to17.NAT<-subset(ANPP_PPT_12vs14to17,Site=="KNZ" & nat_exp=="natural")
+KNZ.sen.12vs14to17.EXP<-subset(ANPP_PPT_12vs14to17,Site=="KNZ" & nat_exp=="experimental")
+
+t.test(KNZ.sen.12vs14to17.NAT$STATS_g_m2_mm,KNZ.sen.12vs14to17.EXP$STATS_g_m2_mm)
+```
+
+```{r Figure 5/Table S7 & S9 - RECOVERY g/m2 responses, include=TRUE}
+#### 2013 vs. LTAs ####
+ANPP_9_LTAs_no_13
+
+KNZ_no13<-subset(ANPP_9_LTAs_no_13,Site=="KNZ")
+HYS_no13<-subset(ANPP_9_LTAs_no_13,Site=="HYS")
+CHY_no13<-subset(ANPP_9_LTAs_no_13,Site=="CHY")
+SGS_no13<-subset(ANPP_9_LTAs_no_13,Site=="SGS")
+
+KNZ_2013<-subset(ANPP_PPT,Year=="2013" & Site=="KNZ")
+HYS_2013<-subset(ANPP_PPT,Year=="2013" & Site=="HYS")
+CHY_2013<-subset(ANPP_PPT,Year=="2013" & Site=="CHY")
+SGS_2013<-subset(ANPP_PPT,Year=="2013" & Site=="SGS")
+
+#### T-tests 2013 vs. LTAs - **Fig. 5 / Table S7** ####
+t.test(KNZ_2013$ANPP,mu=KNZ_no13$ANPP.LTA)
+t.test(HYS_2013$ANPP,mu=HYS_no13$ANPP.LTA)
+t.test(CHY_2013$ANPP,mu=CHY_no13$ANPP.LTA)
+t.test(SGS_2013$ANPP,mu=SGS_no13$ANPP.LTA)
+
+#### Treatment effects in 2018 - Fig. 5 / Table S9 #### 
+# since no rainfall reductions 2018-2021 we can't compare sensitivity 
+ANPP_PPT.2018<-ANPP_PPT[ANPP_PPT$Year %in% 2018,]
+
+rec.mod<-lm(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.2018)
+Anova(rec.mod,type=3)
+pairs(emmeans(rec.mod,pairwise~comb_TRT_by_period|Site))
+
+plot(rec.mod,1)
+plot(rec.mod,2)
+
+#### Treatment effects in 2018-2021 - Fig. 5 / Table S9 ####
+ANPP_PPT.18to21<-ANPP_PPT[ANPP_PPT$Year %in% c(2018:2021),]
+
+rec.mod2<-lmer(log(ANPP)~Site*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT.18to21)
+plot(rec.mod2)
+qqnorm(resid(rec.mod2));qqline(resid(rec.mod2))
+
+anova(rec.mod2,ddf="Kenward-Roger")
+pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
+
+
+rec.mod2<-lm(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.18to21)
+Anova(rec.mod2,type=3)
+pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
+
+```
+
+```{r 2012 and 2013 vs. other yrs w/ two sample means, include=TRUE}
+# Want to compare 2012 and 2013 ANPP (most 2012) w/ other 9/10-yrs ANPP data rather than do the one-sample t-test w/ 2012 or 2013 as the known value compared against ANPP control average across all other yrs
+
+str(ANPP_PPT)
+
+#### Reassign data periods ####
+anpp.12.13.sub<-ANPP_PPT%>%
+  filter(comb_TRT_by_period=="con")%>%
+  mutate(period_12=case_when(
+    Year %in% c("2012") ~ "2012",
+    Year %in% c(2013:2021) ~ "comp_yrs"))%>%
+  mutate(period_13=case_when(
+    Year %in% c("2013") ~ "2013",
+    Year %in% c(2012,2014:2021) ~ "comp_yrs"))
+
+# view(anpp.12.13.sub)
+
+# dat.export<-ANPP_PPT%>%
+#   select(Site,Year,Block,comb_TRT_by_period,Plot,ANPP,Block.ID,Plot.ID)%>%
+#   mutate(Site=case_when(
+#     Site == "CHY" ~ "HPG",
+#     Site %in% c("KNZ","HYS","SGS") ~ Site))
+# 
+# write.csv(dat.export,"Oecologia_ANPP_PPT_TableS7.csv")
+
+#### 2012 summary stats ####
+test.12<-anpp.12.13.sub%>%
+  group_by(Site,period_12)%>%
+  dplyr::summarise(
+    n=n(),
+    av=mean(ANPP),
+    sd=sd(ANPP),
+    SE=sd/sqrt(n))
+
+#### 2013 summary stats ####
+test.13<-anpp.12.13.sub%>%
+  group_by(Site,period_13)%>%
+  dplyr::summarise(
+    n=n(),
+    av=mean(ANPP),
+    sd=sd(ANPP),
+    SE=sd/sqrt(n))
+
+
+#### Stats - Testing 2012 and 2013 vs. 9-yrs control plots ANPP ####
+# 2012 #
+mod.12<-lmer(log(ANPP)~Site*period_12+Block.ID+(1|Plot.ID)+(1|Plot.ID:period_12),data=anpp.12.13.sub)
+mod.12<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID),data=anpp.12.13.sub)
+plot(mod.12)
+qqnorm(resid(mod.12));qqline(resid(mod.12))
+
+# mod.12.noKNZ<-lmer(log(ANPP)~Site*period_12+(1|Plot.ID),data=subset(anpp.12.13.sub,Site!="KNZ"))
+# anova(mod.12.noKNZ,ddf="Kenward-Roger")
+# pairs(emmeans(mod.12.noKNZ,pairwise~period_12|Site))
+
+anova(mod.12,ddf="Kenward-Roger")
+# summary(mod.12)
+r.squaredGLMM(mod.12)
+pairs(emmeans(mod.12,pairwise~period_12|Site))
+
+# 2013 #
+mod.13<-lmer(log(ANPP)~Site*period_13+Block.ID+(1|Plot.ID)+(1|Plot.ID:period_13),data=anpp.12.13.sub)
+mod.13<-lmer(log(ANPP)~Site*period_13+(1|Block.ID)+(1|Block.ID:Plot.ID),data=anpp.12.13.sub)
+
+mod.13<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID),data=anpp.12.13.sub)
+plot(mod.13)
+qqnorm(resid(mod.13));qqline(resid(mod.13))
+
+# mod.13.noKNZ<-lmer(log(ANPP)~Site*period_13+(1|Plot.ID),data=subset(anpp.12.13.sub,Site!="KNZ"))
+# anova(mod.13.noKNZ,ddf="Kenward-Roger")
+# pairs(emmeans(mod.13,pairwise~period_13|Site))
+
+anova(mod.13,ddf="Kenward-Roger")
+r.squaredGLMM(mod.13)
+pairs(emmeans(mod.13,pairwise~period_13|Site))
+
+avs<-anpp.12.13.sub%>%
+  group_by(Site,period_13)%>%
+  dplyr::summarise(
+    n.plots.over.yrs=n(),
+    av=mean(ANPP))
+
+ANPP_PPT_adj<-ANPP_PPT%>%
+  mutate(period_13=ifelse(Year=="2013","2013","comp_yrs"))%>%
+  mutate(period_12=ifelse(Year=="2012","2012","comp_yrs"))
+
+avs_adj<-ANPP_PPT_adj%>%
+  filter(comb_TRT_by_period=="con")%>%
+  group_by(Site,period_13)%>%
+  dplyr::summarise(
+    n.plots.over.yrs=n(),
+    av=mean(ANPP)
+  )
+
+ANPP_9_LTAs_no_13
+```
