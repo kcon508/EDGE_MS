@@ -444,6 +444,70 @@ Anova(temp.daily.comps,type=3)
 temp.daily.comps<-lm(tmean~Site+nat_exp,data=vpd.nat_exp.gs)
 Anova(temp.daily.comps,type=3)
 summary(temp.daily.comps)
+
+
+#### VPD and temperature over growing season - Table S5 ####
+vpd.gs<-vpd.nat_exp.gs%>%
+  group_by(Site,Year,nat_exp)%>%
+  dplyr::summarise(
+    n.days=n(),
+    vpd=mean(vpd_mean),
+    temp=mean(tmean))
+
+## temp ##
+# gs.temp<-lm(temp~Site*nat_exp,data=vpd.gs)
+# gs.temp2<-lm(log(temp)~Site*nat_exp,data=vpd.gs)
+# gs.temp3<-lm((temp^(1/2))~Site*nat_exp,data=vpd.gs)
+# gs.temp4<-lm((temp^(1/3))~Site*nat_exp,data=vpd.gs)
+
+gs.temp<-lm(temp~Site+nat_exp,data=vpd.gs)
+summary(gs.temp)
+# gs.temp2<-lm(log(temp)~Site+nat_exp,data=vpd.gs)
+# gs.temp3<-lm((temp^(1/2))~Site+nat_exp,data=vpd.gs)
+# gs.temp4<-lm((temp^(1/3))~Site+nat_exp,data=vpd.gs)
+
+# plot(gs.temp,1)
+# plot(gs.temp2,1)
+# plot(gs.temp3,1)
+# plot(gs.temp4,1)
+# 
+# plot(gs.temp,2)
+# plot(gs.temp2,2)
+# plot(gs.temp3,2)
+# plot(gs.temp4,2)
+
+Anova(gs.temp,type=3)
+# Anova(gs.temp2,type=3)
+# Anova(gs.temp3,type=3)
+# Anova(gs.temp4,type=3)
+
+## vpd ##
+## temp ##
+# gs.vpd<-lm(vpd~Site*nat_exp,data=vpd.gs)
+# gs.vpd2<-lm(log(vpd)~Site*nat_exp,data=vpd.gs)
+# gs.vpd3<-lm((vpd^(1/2))~Site*nat_exp,data=vpd.gs)
+# gs.vpd4<-lm((vpd^(1/3))~Site*nat_exp,data=vpd.gs)
+
+gs.vpd<-lm(vpd~Site+nat_exp,data=vpd.gs)
+summary(gs.vpd)
+# gs.vpd2<-lm(log(vpd)~Site+nat_exp,data=vpd.gs)
+# gs.vpd3<-lm((vpd^(1/2))~Site+nat_exp,data=vpd.gs)
+# gs.vpd4<-lm((vpd^(1/3))~Site+nat_exp,data=vpd.gs)
+# 
+# plot(gs.vpd,1)
+# plot(gs.vpd2,1)
+# plot(gs.vpd3,1)
+# plot(gs.vpd4,1)
+
+# plot(gs.vpd,2)
+# plot(gs.vpd2,2)
+# plot(gs.vpd3,2)
+# plot(gs.vpd4,2)
+
+Anova(gs.vpd,type=3)
+# Anova(gs.vpd2,type=3)
+# Anova(gs.vpd3,type=3)
+# Anova(gs.vpd4,type=3)
 ```
 
 #### ANPP Comparisons *******************************
@@ -783,6 +847,7 @@ ANPP_PPT_12.13<-ANPP_PPT[ANPP_PPT$Year %in% c("2012","2013"),]
 
 ## Check Site*Year interaction (no treatment b/c no treatment in 2012 or 2013, the Year fixed effect checks 2012 drought vs. 2013 recovery)
 mod.12to13<-lmer(log(ANPP)~Site*Year+(1|Plot.ID),data=ANPP_PPT_12.13)
+# mod.12to13.rev3<-lmer(log(ANPP)~Site*Year+(1|Plot.ID/Year),data=ANPP_PPT_12.13) # not possible b/c "number of levels of each grouping factor must be < number of observations
 anova(mod.12to13,ddf="Kenward-Roger")
 summary(mod.12to13)
 r.squaredGLMM(mod.12to13)
@@ -792,6 +857,7 @@ pairs(emmeans(mod.12to13,pairwise~Year|Site))
 ANPP_PPT_14.17<-ANPP_PPT[ANPP_PPT$Year %in% c("2014","2015","2016","2017"),]
 
 mod.14to17<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT_14.17)
+# mod.14to17.rev3<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID/Year),data=ANPP_PPT_14.17) # not possible b/c "number of levels of each grouping factor must be < number of observations
 anova(mod.14to17,ddf="Kenward-Roger")
 r.squaredGLMM(mod.14to17)
 pairs(emmeans(mod.14to17,pairwise~comb_TRT_by_period|Year|Site))
@@ -800,6 +866,7 @@ pairs(emmeans(mod.14to17,pairwise~comb_TRT_by_period|Year|Site))
 ANPP_PPT_18.21<-ANPP_PPT[ANPP_PPT$Year %in% c("2018","2019","2020","2021"),]
 
 mod.18to21<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT_18.21)
+# mod.18to21<-lmer(log(ANPP)~Site*Year*comb_TRT_by_period+(1|Plot.ID/Year),data=ANPP_PPT_18.21) # not possible b/c "number of levels of each grouping factor must be < number of observations 
 anova(mod.18to21,ddf="Kenward-Roger")
 r.squaredGLMM(mod.18to21)
 pairs(emmeans(mod.18to21,pairwise~comb_TRT_by_period|Year|Site))
@@ -879,6 +946,7 @@ table(redu.12vs14$Block.ID,redu.12vs14$nat_exp) # all blocks have data except mi
 
 # drop interaction not significant # 
 all.sensitivity<-lmer((STATS_g_m2_mm^(1/3))~Site+nat_exp+(1|Block.ID),data=redu.12vs14)
+# all.sensitivity.rev3<-lmer((STATS_g_m2_mm^(1/3))~Site+nat_exp+(1|Block.ID/nat_exp),data=redu.12vs14) # not possible b/c number of levels of each grouping factor must be < number of obsedrvations 
 anova(all.sensitivity,ddf="Kenward-Roger")
 
 r.squaredGLMM(all.sensitivity)
@@ -906,25 +974,22 @@ pairs(emmeans(all.sensitivity.rev3,pairwise~nat_exp))
 #### Treatment effects in 2018 - Fig. 5 / Table S9 #### 
 # since no rainfall reductions 2018-2021 we can't compare sensitivity 
 ANPP_PPT.2018<-ANPP_PPT[ANPP_PPT$Year %in% 2018,]
+table(ANPP_PPT.2018$Plot.ID,ANPP_PPT.2018$comb_TRT_by_period)
 
-rec.mod<-lm(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.2018)
+rec.mod<-lmer(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.2018)
 Anova(rec.mod,type=3)
 pairs(emmeans(rec.mod,pairwise~comb_TRT_by_period|Site))
 
-plot(rec.mod,1)
-plot(rec.mod,2)
-
 #### Treatment effects in 2018-2021 - Fig. 5 / Table S9 ####
-ANPP_PPT.18to21<-ANPP_PPT[ANPP_PPT$Year %in% c(2018:2021),] # between plots only
-table(ANPP_PPT.18to21$Plot.ID,ANPP_PPT.18to21$comb_TRT_by_period)
+ANPP_PPT.18to21<-ANPP_PPT[ANPP_PPT$Year %in% c(2018:2021),] 
+table(ANPP_PPT.18to21$Plot.ID,ANPP_PPT.18to21$comb_TRT_by_period) # between plots only but 4 observations per plot for con OR drought
 
 rec.mod2<-lmer(log(ANPP)~Site*comb_TRT_by_period+(1|Plot.ID),data=ANPP_PPT.18to21)
+rec.mod2.rev3<-lmer(log(ANPP)~Site*comb_TRT_by_period+(1|Plot.ID/comb_TRT_by_period),data=ANPP_PPT.18to21)
 anova(rec.mod2,ddf="Kenward-Roger")
+anova(rec.mod2.rev3,ddf="Kenward-Roger")
 pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
+pairs(emmeans(rec.mod2.rev3,pairwise~comb_TRT_by_period|Site))
 
-
-rec.mod2<-lm(log(ANPP)~Site*comb_TRT_by_period,data=ANPP_PPT.18to21)
-Anova(rec.mod2,type=3)
-pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
 
 ```
