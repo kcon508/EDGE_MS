@@ -32,14 +32,14 @@ my_theme<-theme(strip.background=element_blank(),
         legend.background=element_rect(fill="transparent",
                                        linewidth=0.5),
         legend.position="none",
-        legend.title=element_text(size=30,face="bold"),
+        legend.title=element_text(size=20,face="bold"),
         legend.text=element_text(size=15),
         axis.line=element_line(linewidth=1.5),
-        axis.ticks=element_line(linewidth=1.5),
-        axis.title = element_text(size=30),
-        axis.text=element_text(size=20,colour="black"),
+        axis.ticks=element_line(linewidth=1.5,colour="black"),
+        axis.title = element_text(size=20),
+        axis.text=element_text(size=15,colour="black"),
         axis.text.x=element_text(angle=45,hjust=1),
-        plot.title=element_text(size=25))
+        plot.title=element_text(size=20))
 
 ```
 
