@@ -447,6 +447,8 @@ summary(temp.daily.comps)
 
 
 #### VPD and temperature over growing season - Table S5 ####
+# Running the analysis with this data is comparing the 2012 group with a single observation (and no variance) to the 2014-2017 averages...which is weird for an ANOVA. Also if we update the graph, we would have no error bars for 2012 and would have error bars for the 14-17 bar -- which matches Fig 2c except we used four t-tests there instead of an ANOVA...so match that or do different analysis here? Other option is to do Monthly but then have to include Month as a fixed effect and doing that would then give Site*Month*nat_exp and require stepwise model selection (which would just be annoying at this point)
+
 vpd.gs<-vpd.nat_exp.gs%>%
   group_by(Site,Year,nat_exp)%>%
   dplyr::summarise(
@@ -509,6 +511,90 @@ Anova(gs.vpd,type=3)
 # Anova(gs.vpd3,type=3)
 # Anova(gs.vpd4,type=3)
 ```
+
+```{r Temp and VPD Graphs}
+vpd.temp.gr.avs<-vpd.gs%>%
+  group_by(Site,nat_exp)%>%
+  dplyr::summarise(
+    n.yrs=n(),
+    mean.vpd=mean(vpd),
+    sd.vpd=sd(vpd),
+    SE.vpd=sd.vpd/sqrt(n.yrs),
+    mean.temp=mean(temp),
+    sd.temp=sd(temp),
+    SE.temp=sd.temp/sqrt(n.yrs))
+
+vpd.temp.gr.avs
+
+
+######## FIGURE 2D HERE ########
+##### MUST CHANGE VPD FILTER YEARS ABOVE #######
+gr_dat<-vpd.temp.gr.avs%>%
+  mutate(site.labs=case_when(
+    Site %in% c("KNZ","HYS","SGS") ~ Site,
+    Site == "CHY" ~ "HPG"))%>%
+  mutate(site.labs=factor(site.labs,levels=c("KNZ","HYS","HPG","SGS")))
+
+
+y_var<-gr_dat$mean.vpd
+y_SE<-as.numeric(gr_dat$SE.vpd)
+y_lab<-"GS Average Daily Mean VPD (kPa)"
+y_lim<-c(0,2.6)
+fi.name<-"EDGE_MS_Rev3_Fig2d_VPD.pdf"
+
+# y_var<-gr_dat$mean.temp
+# y_SE<-gr_dat$SE.temp
+# y_lab<-"GS Average Daily Mean Temperature (ºC)"
+# y_lim<-c(0,26)
+# fi.name<-"EDGE_MS_Rev3_Fig2c_temp.pdf"
+
+comb.vpd.by.yr<-ggplot(data=gr_dat,aes(x=nat_exp,y=as.numeric(y_var)))+
+  geom_rect(data=gr_dat,
+            aes(xmin=1.5,xmax=Inf,ymin=-Inf,ymax=Inf),
+            fill="lightblue1")+
+  geom_bar(position="dodge",
+           colour="black",
+           stat="identity",
+           width=0.75,
+           linewidth=0.5,
+           fill="cadetblue3")+
+  geom_errorbar(data=gr_dat,
+                aes(x=nat_exp,
+                    ymin=y_var-y_SE,
+                    ymax=y_var+y_SE),
+                stat="identity",
+                position=position_dodge(0.75),
+                width=0,
+                linewidth=0.5,
+                color="black")+
+  labs(x="",y=y_lab)+
+  # geom_text(data=vpd.combined,
+  #           label="experimental",
+  #           x=2.1,y=2.32,
+  #           color="lightblue4",
+  #           size=4.5)+
+  # geom_text(data=vpd.combined,
+  #           label="natural",
+  #           x=1.2,y=2.32,
+  #           color="gray35",
+  #           size=4.5)+
+  theme_classic()+
+  my_theme+
+  theme(legend.position="none")+
+  scale_y_continuous(limits=y_lim,
+                     expand=c(0,0))+
+  scale_x_discrete(labels=
+                     c("natural"="2012",
+                       "experimental" = "14-17"))+
+  facet_wrap(~site.labs,ncol=1,scales="free")
+
+comb.vpd.by.yr
+
+ggsave(comb.vpd.by.yr,filename=fi.name,height=12,width=3.25)
+
+```
+
+
 
 #### ANPP Comparisons *******************************
 ```{r ANPP and PPT Data, include=FALSE}
@@ -835,6 +921,249 @@ t.test(SGS_comps$perc_LTA,mu=SGS_comps_12$perc_LTA)
 # could also do with alternative = "less" to check one-sided hypothesis. But OG manuscript alternative = two sided, not specified
 ```
 
+```{r Figure 2 updated means}
+#### PRISM data #### 
+daily.vpd<-read.csv("Users/Kathy/Desktop/EDGE_Recovery_2/Clean/EDGE Reanalysis/EDGE_PRISM_LTAs/EDGE_PRISM_allsites_daily_values.csv")
+str(daily.vpd)
+
+## choose years to keep ##
+prism.yrs<-c(2012:2021)
+daily.vpd.sub<-daily.vpd[daily.vpd$Year %in% prism.yrs,]
+
+## subset for growing seasons ##
+str(daily.vpd.sub)
+daily.vpd.sub$Date<-as.Date(daily.vpd.sub$Date,format="%m/%d/%y")
+daily.vpd.sub$vpd_min<-(daily.vpd.sub$vpd_min*0.1)
+daily.vpd.sub$vpd_max<-(daily.vpd.sub$vpd_max*0.1)
+daily.vpd.sub$vpd_mean<-((daily.vpd.sub$vpd_min+daily.vpd.sub$vpd_max)/2)
+
+prism.daily.gs.av<-daily.vpd.sub%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"04-01",sep="-")),
+    ymd(paste(first(yr),"09-15",sep="-"))))%>%
+  summarise(n=n(),
+            tmean=mean(tmean),
+            SE_tmean=(sd(tmean))/sqrt(n),
+            min_vpd=mean(vpd_min),
+            SE_min_vpd=(sd(vpd_min))/sqrt(n),
+            max_vpd=mean(vpd_max),
+            SE_max_vpd=(sd(vpd_max))/sqrt(n),
+            mean_vpd=mean(vpd_mean),
+            SE_mean_vpd=(sd(vpd_mean))/sqrt(n))
+str(prism.daily.gs.av)
+
+
+#### 10-yr average from daily ####
+prism.gs.temps.10<-prism.daily.gs.av%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean=mean(tmean),
+    SE=(sd(tmean))/sqrt(n),
+    GROUP="10 yr GS averages")
+
+prism.gs.temps.10
+
+#### 30 year averages ####
+## subset for 30 yrs ##
+daily.vpd.2<-daily.vpd%>%
+  filter(Year %in% c(1990:2019))
+  
+str(daily.vpd.2) # 45,292 
+
+daily.vpd<-daily.vpd.2
+daily.vpd$Date<-as.Date(daily.vpd$Date,format="%m/%d/%y")
+daily.vpd$vpd_min<-(daily.vpd$vpd_min*0.1)
+daily.vpd$vpd_max<-(daily.vpd$vpd_max*0.1)
+daily.vpd$vpd_mean<-((daily.vpd$vpd_min+daily.vpd$vpd_max)/2)
+
+prism.daily.gs.av<-daily.vpd%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"04-01",sep="-")),
+    ymd(paste(first(yr),"09-15",sep="-"))))%>%
+  summarise(n=n(),
+            tmean=mean(tmean),
+            SE_tmean=(sd(tmean))/sqrt(n),
+            min_vpd=mean(vpd_min),
+            SE_min_vpd=(sd(vpd_min))/sqrt(n),
+            max_vpd=mean(vpd_max),
+            SE_max_vpd=(sd(vpd_max))/sqrt(n),
+            mean_vpd=mean(vpd_mean),
+            SE_mean_vpd=(sd(vpd_mean))/sqrt(n))
+str(prism.daily.gs.av)
+
+#### 30-yr average from daily ####
+prism.gs.temps.30<-prism.daily.gs.av%>%
+  mutate(Site=factor(Site,levels=c("KNZ","HYS","CHY","SGS")))%>%
+  group_by(Site)%>%
+  dplyr::summarise(
+    n=n(),
+    mean=mean(tmean),
+    SE=(sd(tmean))/sqrt(n),
+    GROUP="30 yr GS averages")
+
+prism.gs.temps.30
+
+###### natural vs. experimental drought ######
+# daily #
+prism.daily.gs.av$nat_exp<-NA
+
+prism.daily.gs.av<-prism.daily.gs.av%>%
+  mutate(nat_exp=case_when(
+    yr %in% 2012 ~ "natural",
+    yr %in% c(2014,2015,2016,2017) ~ "experimental",
+    yr %in% c(2013,2018,2019,2020,2021) ~ "recovery"))%>%
+  mutate(Site=fct_relevel(as.factor(Site),"KNZ","HYS","CHY","SGS"))
+
+
+str(prism.daily.gs.av)
+
+
+#### Temp Graphs ####
+# Daily data split by years (GROWING SEASON) #
+x_var=as.factor(prism.daily.gs.av$yr)
+
+y_var=prism.daily.gs.av$tmean
+y_min=prism.daily.gs.av$tmean-prism.daily.gs.av$SE_tmean
+y_max=prism.daily.gs.av$tmean+prism.daily.gs.av$SE_tmean
+y_lab=expression("GS Average\nDaily Temperature " ( degree*C))
+y_lim=c(0,25)
+file_name="Plots/Final Edits/EDGE_DailyTemp_GS.pdf"
+
+####### WORKING HERE ##########
+temp.by.yr<-ggplot(data=prism.daily.gs.av,aes(x=x_var,y=y_var))+
+  # geom_rect(aes(xmin=2.5,xmax=6.5,ymin=-Inf,ymax=Inf),fill="lightblue1")+
+  # geom_rect(aes(xmin=6.5,xmax=Inf,ymin=-Inf,ymax=Inf),fill="gray90")+
+  geom_bar(position="dodge",colour="black",stat="identity",width=0.75,linewidth=1,fill="gray80")+
+  geom_errorbar(aes(ymin=y_min,ymax=y_max),position=position_dodge(0.75),width=0,linewidth=1)+
+  labs(x="Year",y=y_lab)+
+  theme_classic()+
+  my_theme+
+  theme(legend.position="none",
+        plot.margin=unit(c(0,0,0,0.5), "in"))+
+  scale_y_continuous(limits=y_lim)+
+  facet_wrap(~Site,ncol=2,scales="free")
+
+temp.by.yr
+
+# ggsave(temp.by.yr,filename=file_name,bg="transparent",width=10,height=7)
+
+# Daily data drought years combined #
+# daily.vpd.sub<-daily.vpd.sub[daily.vpd.sub$Year %in% c("2012","2014","2015","2016","2017"),]
+daily.vpd.sub$nat_exp<-NA
+
+daily.vpd.sub<-daily.vpd.sub%>%
+  mutate(nat_exp=case_when(
+    Year %in% 2012 ~ "natural",
+    Year %in% c("2014","2015","2016","2017") ~ "experimental",
+    Year %in% c("2013","2018","2019","2020","2021") ~ "recovery"))
+
+## Growing season ##
+vpd.gs.combined<-daily.vpd.sub%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,nat_exp,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"04-01",sep="-")),
+    ymd(paste(first(yr),"09-15",sep="-"))))%>%
+  group_by(Site,nat_exp)%>%
+  dplyr::summarise(
+    n=n(),
+    t_mean=mean(tmean),
+    SE_tmean=(sd(tmean))/sqrt(n),
+    yrs_mean_vpd=mean(vpd_mean),
+    SE_yrs_mean_vpd=(sd(vpd_mean))/sqrt(n),
+    yrs_max_vpd=mean(vpd_max),
+    SE_yrs_max_vpd=(sd(vpd_max))/sqrt(n))
+
+vpd.gs.combined
+
+vpd.gs.combined<-vpd.gs.combined%>%
+  mutate(nat_exp=fct_relevel(as.factor(nat_exp),"natural","experimental"))%>%
+  mutate(Site=fct_relevel(as.factor(Site),"KNZ","HYS","CHY","SGS"))
+
+vpd.gs.combined
+
+## Annual ##
+vpd.an.combined<-daily.vpd.sub%>%
+  mutate(new_date=ymd(Date))%>%
+  group_by(Site,nat_exp,yr=year(new_date))%>%
+  filter(new_date %within% interval(
+    ymd(paste(first(yr),"01-01",sep="-")),
+    ymd(paste(first(yr),"12-31",sep="-"))))%>%
+  group_by(Site,nat_exp)%>%
+  dplyr::summarise(
+    n=n(),
+    t_mean=mean(tmean),
+    SE_tmean=(sd(tmean))/sqrt(n),
+    yrs_mean_vpd=mean(vpd_mean),
+    SE_yrs_mean_vpd=(sd(vpd_mean))/sqrt(n),
+    yrs_max_vpd=mean(vpd_max),
+    SE_yrs_max_vpd=(sd(vpd_max))/sqrt(n))
+
+vpd.an.combined
+
+vpd.an.combined<-vpd.an.combined%>%
+  mutate(nat_exp=fct_relevel(as.factor(nat_exp),"natural","experimental"))%>%
+  mutate(Site=fct_relevel(as.factor(Site),"KNZ","HYS","CHY","SGS"))
+
+vpd.an.combined
+
+## Graph ##
+## growing season ##
+dat=vpd.gs.combined
+dat=dat%>%
+  mutate(Site,fct_relevel(Site,"KNZ","HYS","CHY","SGS"))
+x_var=vpd.gs.combined$nat_exp
+
+y_var=vpd.gs.combined$t_mean
+y_min=vpd.gs.combined$t_mean-vpd.gs.combined$SE_tmean
+y_max=vpd.gs.combined$t_mean+vpd.gs.combined$SE_tmean
+y_lab=expression("Average Daily\n GS Temperature " ( degree*C))
+y_lim=c(0,25)
+file_name="Plots/Final Edits/EDGE_GST Avs.pdf"
+
+# annual ##
+# dat=vpd.an.combined
+# dat=dat%>%
+#   mutate(Site,fct_relevel(Site,"KNZ","HYS","CHY","SGS"))
+# x_var=vpd.an.combined$nat_exp
+# 
+# y_var=vpd.an.combined$t_mean
+# y_min=vpd.an.combined$t_mean-vpd.an.combined$SE_tmean
+# y_max=vpd.an.combined$t_mean+vpd.an.combined$SE_tmean
+# y_lab=expression("Average Daily Temperature " ( degree*C))
+# y_lim=c(0,15)
+# file_name="Plots/Final Edits/EDGE_MAT Avs.pdf"
+
+comb.vpd.by.yr<-ggplot(data=dat,aes(x=x_var,y=as.numeric(y_var)))+
+  geom_rect(data=dat,aes(xmin=1.5,xmax=Inf,ymin=-Inf,ymax=Inf),fill="lightblue1")+
+  geom_bar(position="dodge",colour="black",stat="identity",width=0.75,linewidth=1,fill="cadetblue3")+
+  geom_errorbar(aes(ymin=y_min,ymax=y_max),position=position_dodge(0.75),width=0,linewidth=1)+
+  labs(x="",y=y_lab)+
+  theme_classic()+
+  my_theme+
+  theme(legend.position="none",
+       plot.margin=unit(c(0,0,0,0),"in"))+ # add 0.05 in  in last 0 for left side room
+  scale_y_continuous(limits=y_lim)+
+  scale_x_discrete(labels=
+                     c("natural"="2012",
+                       "experimental" = "14-17\naverage"))+
+  facet_wrap(~Site,ncol=1,scales="free")
+
+comb.vpd.by.yr
+
+# ggsave(comb.vpd.by.yr,filename=file_name,bg="transparent",width=9.5,height=9)
+
+# ggsave(comb.vpd.by.yr,filename="Plots/Final Edits/EDGE_Fig2_vpd.pdf",height=9,width=9)
+
+# ggsave(comb.vpd.by.yr,filename="Plots/Final Edits/EDGE_Fig2_temp_tall.pdf",height=12,width=3.25)
+```
+
 ```{r Figure 3a - ANPP over all years, include=TRUE}
 ## Assign unique ID's for Block random effects (when modeling with all Sites Block/Plot #'s would repeat)
 ANPP_PPT$Block.ID<-paste(ANPP_PPT$Site,ANPP_PPT$Block,sep=".")
@@ -990,6 +1319,4 @@ anova(rec.mod2,ddf="Kenward-Roger")
 anova(rec.mod2.rev3,ddf="Kenward-Roger")
 pairs(emmeans(rec.mod2,pairwise~comb_TRT_by_period|Site))
 pairs(emmeans(rec.mod2.rev3,pairwise~comb_TRT_by_period|Site))
-
-
 ```
